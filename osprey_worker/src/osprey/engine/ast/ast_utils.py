@@ -83,7 +83,10 @@ def iter_nodes(root: 'ASTNode') -> Iterator['ASTNode']:
             # maybe_periodic_yield()
             if isinstance(field_value, ASTNode):
                 yield from _iter_inner(field_value)
-            elif isinstance(field_value, list):
+            elif isinstance(field_value, Sequence) and not isinstance(field_value, (str, bytes)):
+                # Node fields that hold multiple children (e.g. `Root.statements`, `Call.arguments`) are
+                # typed as `Sequence[...]`, not `list` - a tuple is just as valid, so we can't check for
+                # `list` specifically or we'll silently skip its contents.
                 for item in field_value:
                     yield from _iter_inner(item)
 
@@ -129,12 +132,19 @@ def replace_from_root(source: 'ASTNode', replacement: 'ASTNode') -> Statement:
             elif isinstance(field_value, ASTNode):
                 _replace_inner(field_value)
 
-            elif isinstance(field_value, list):
-                for i, item in enumerate(field_value):
+            elif isinstance(field_value, Sequence) and not isinstance(field_value, (str, bytes)):
+                # Node fields that hold multiple children are typed as `Sequence[...]`, so `field_value`
+                # may be an immutable `tuple` rather than a `list` - it can't be mutated in place (as a
+                # tuple would raise on item assignment), so rebuild it and write it back via setattr,
+                # preserving whatever sequence type it was.
+                new_items = []
+                for item in field_value:
                     if is_source(item):
-                        field_value[i] = replacement
+                        new_items.append(replacement)
                     else:
                         _replace_inner(item)
+                        new_items.append(item)
+                setattr(root, field_name, type(field_value)(new_items))  # type: ignore[call-arg]
 
     _replace_inner(statement)
     return statement

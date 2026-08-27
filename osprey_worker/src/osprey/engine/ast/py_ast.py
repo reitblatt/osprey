@@ -1,6 +1,7 @@
 """This implements the Python AST -> Osprey AST transformer."""
 
 import ast
+from collections.abc import Sequence
 from typing import Any, Type, TypeVar
 
 from .ast_utils import iter_field_values
@@ -489,7 +490,10 @@ def fixup_parents(root: Root) -> None:
         for _field_name, field_value in iter_field_values(current_node):
             if isinstance(field_value, ASTNode):
                 recursively_insert_parents(current_node, field_value)
-            elif isinstance(field_value, list):
+            elif isinstance(field_value, Sequence) and not isinstance(field_value, (str, bytes)):
+                # Node fields that hold multiple children are typed as `Sequence[...]`, not `list` - a
+                # tuple is just as valid, so we can't check for `list` specifically or we'll silently
+                # skip setting `.parent` on its contents.
                 for item in field_value:
                     recursively_insert_parents(current_node, item)
 
