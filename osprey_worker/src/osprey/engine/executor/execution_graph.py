@@ -190,12 +190,17 @@ def _topologically_sort_dependency_chain_for(
     visited: set[DependencyChain] = set()
 
     def do_topological_sort(chain: DependencyChain) -> None:
-        for dependency in chain.dependent_on:
-            do_topological_sort(dependency)
-
+        # Consult `visited` *before* recursing. The recursion cost is otherwise proportional to the
+        # number of distinct paths from the source's statements to each chain, which is exponential in
+        # graph depth for a diamond-shaped feature graph (e.g. layered scores that each combine lower
+        # features sharing a common ancestor). Checking first makes this O(V + E): every chain's
+        # `dependent_on` is walked exactly once. The post-order append position is unchanged.
         if chain in visited:
             return
         visited.add(chain)
+
+        for dependency in chain.dependent_on:
+            do_topological_sort(dependency)
 
         sorted_chain.append(chain)
 
